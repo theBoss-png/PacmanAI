@@ -1,0 +1,403 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>HTML5 Pacman</title>
+    <style type="text/css">
+
+@font-face {
+    font-family: "BDCartoonShoutRegular";
+    src: url("BD_Cartoon_Shout-webfont.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: #000;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 8px;
+    overflow-x: auto;
+}
+
+h1 {
+    font-family: BDCartoonShoutRegular;
+    text-align: center;
+    color: #FFD700;
+    font-size: 28px;
+    letter-spacing: 4px;
+    margin-bottom: 16px;
+}
+
+#shim {
+    font-family: BDCartoonShoutRegular;
+    position: absolute;
+    visibility: hidden;
+}
+
+/* Wrapper: alle drei Teile nebeneinander */
+#wrapper {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: max-content;
+}
+
+#pacman {
+    height: 450px;
+    width: 320px;
+    flex-shrink: 0;
+    border: 2px solid #1a1aff;
+    box-shadow: 0 0 16px #1a1aff88;
+}
+
+/* ── Stats Panel ─────────────────────────── */
+.stats-panel {
+    width: 520px;
+    flex-shrink: 0;
+    overflow-y: visible;   /* kein Scrollen */
+    background-color: #0a0a0a;
+    border: 1px solid #1a1aff;
+    border-radius: 8px;
+    padding: 16px;
+    color: #e0e0e0;
+}
+
+.stats-panel h2 {
+    font-family: BDCartoonShoutRegular;
+    font-size: 13px;
+    color: #FFD700;
+    text-align: center;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #1a1aff;
+    padding-bottom: 4px;
+}
+
+.stat-block {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 6px;
+}
+
+/* 2-spaltige Rasteranzeige für Kennzahlen */
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+/* 3-spaltig für kompaktere Gruppen */
+.stat-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+/* einzelne Kachel im stat-grid */
+.stat-tile {
+    background: #0d0d1a;
+    border: 1px solid #1a1aff44;
+    border-left: 3px solid #1a1aff;
+    border-radius: 4px;
+    padding: 5px 7px;
+    display: flex;
+    flex-direction: column;
+}
+
+.info-block {
+    background: #111;
+    padding: 6px 8px;
+    border-radius: 4px;
+    border-left: 3px solid #1a1aff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.info-label {
+    font-size: 8px;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 2px;
+}
+
+.stat-label {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #555;
+    margin-bottom: 1px;
+}
+
+.stat-value {
+    font-size: 13px;
+    color: #FFD700;
+    font-family: 'Courier New', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* kleinere Variante innerhalb der Kacheln */
+.stat-tile .stat-label  { font-size: 8px;  color: #555; }
+.stat-tile .stat-value  { font-size: 12px; }
+
+.stat-divider {
+    border: none;
+    border-top: 1px solid #1a1aff44;
+    margin: 7px 0;
+}
+
+/* Chart Container — volle Breite, etwas höher */
+.chart-container {
+    position: relative;
+    width: 100%;
+    height: 180px;
+    background-color: #050510;
+    border: 1px solid #1a1aff55;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+/* Charts nie nebeneinander — immer volle Breite */
+.chart-block {
+    margin-bottom: 8px;
+}
+
+.grid-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+/* Buttons */
+.ctrl-btn {
+    display: block;
+    width: 100%;
+    margin-bottom: 6px;
+    padding: 6px 0;
+    background-color: #050530;
+    color: #e0e0e0;
+    border: 1px solid #1a1aff;
+    border-radius: 4px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.15s;
+}
+
+.ctrl-btn:hover {
+    background-color: #1a1aff33;
+    color: #FFD700;
+    border-color: #FFD700;
+}
+
+.ctrl-btn.danger {
+    border-color: #e94560;
+    color: #e94560;
+}
+
+.ctrl-btn.danger:hover {
+    background-color: #2a0010;
+}
+
+.stat-block-network {
+    margin-top: 12px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#network-viz {
+    width: 100%;
+    height: 280px;
+    background-color: #050510;
+    border: 1px solid #1a1aff55;
+    border-radius: 4px;
+}
+
+.node       { stroke: #fff; stroke-width: 1.5px; }
+.link       { stroke: #999; stroke-opacity: 0.4; fill: none; }
+.marker     { fill: #444; }
+
+    </style>
+  </head>
+  <body>
+
+    <div id="shim">shim for font face</div>
+    <h1>HTML5 Pacman</h1>
+
+    <div id="wrapper">
+
+      <!-- ── Panel 1: AI Stats ─────────────────── -->
+      <div class="stats-panel">
+        <h2>AI Stats</h2>
+
+        <!-- Generation + Genome nebeneinander -->
+        <div class="stat-grid">
+          <div class="stat-tile">
+            <span class="stat-label">Generation</span>
+            <span class="stat-value" id="stat-generation">0</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-label">Genome</span>
+            <span class="stat-value" id="stat-genome">0 / 50</span>
+          </div>
+        </div>
+
+        <!-- Fitness-Werte: 3 nebeneinander -->
+        <div class="stat-grid-3">
+          <div class="stat-tile">
+            <span class="stat-label">Best Fitness</span>
+            <span class="stat-value" id="stat-best-fitness">0.00</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-label">Cur. Fitness</span>
+            <span class="stat-value" id="stat-avg-score">0.00</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-label">Game Score</span>
+            <span class="stat-value" id="stat-current-game-score">0</span>
+          </div>
+        </div>
+
+        <!-- Penalty + ETA nebeneinander -->
+        <div class="stat-grid">
+          <div class="stat-tile">
+            <span class="stat-label">Idle Penalty</span>
+            <span class="stat-value" id="stat-current-penalty">0</span>
+          </div>
+          <div class="stat-tile">
+            <span class="stat-label">ETA 1000 Score</span>
+            <span class="stat-value" id="stat-eta-score">0</span>
+          </div>
+        </div>
+
+        <hr class="stat-divider">
+
+        <!-- Charts: volle Breite, einzeln gestapelt -->
+        <div class="chart-block">
+          <span class="stat-label">Avg Score Verlauf</span>
+          <div class="chart-container">
+            <canvas id="chart-avg"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-block">
+          <span class="stat-label">Best Fitness Verlauf</span>
+          <div class="chart-container">
+            <canvas id="chart-best"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-block">
+          <span class="stat-label">Avg Tick Lifespan</span>
+          <div class="chart-container">
+            <canvas id="chart-tick"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-block">
+          <span class="stat-label">Avg Nodes per Generation</span>
+          <div class="chart-container">
+            <canvas id="chart-nodes"></canvas>
+          </div>
+        </div>
+
+        <hr class="stat-divider">
+
+        <button class="ctrl-btn" onclick="exportSave()">💾 Export JSON</button>
+        <label class="ctrl-btn">
+          📂 Import JSON
+          <input type="file" accept=".json" onchange="importSave(event)" style="display:none;">
+        </label>
+        <button class="ctrl-btn danger" onclick="clearSave()">🗑 Reset</button>
+
+        <div class="stat-block" style="margin-top:6px;">
+          <span class="stat-label">Autosave</span>
+          <span class="stat-value" id="stat-autosave"
+                style="font-size:9px; color:#555; word-break:break-all;">—</span>
+        </div>
+      </div>
+      <!-- ── Ende Panel 1 ───────────────────────── -->
+
+      <!-- ── Spielfeld ─────────────────────────── -->
+      <div id="pacman"></div>
+
+      <!-- ── Panel 2: AI Information ───────────── -->
+      <div class="stats-panel">
+        <h2>AI Information</h2>
+
+        <div class="grid-container">
+          <!-- Quadranten -->
+          <div class="info-block"><span class="info-label">Q1 (OL)</span><span class="stat-value" id="info-quadrant1">0</span></div>
+          <div class="info-block"><span class="info-label">Q2 (OR)</span><span class="stat-value" id="info-quadrant2">0</span></div>
+          <div class="info-block"><span class="info-label">Q3 (UL)</span><span class="stat-value" id="info-quadrant3">0</span></div>
+          <div class="info-block"><span class="info-label">Q4 (UR)</span><span class="stat-value" id="info-quadrant4">0</span></div>
+
+          <hr class="stat-divider" style="grid-column: span 2;">
+
+          <!-- Positionen -->
+          <div class="info-block"><span class="info-label">Pac X</span><span class="stat-value" id="info-userPosX">0</span></div>
+          <div class="info-block"><span class="info-label">Pac Y</span><span class="stat-value" id="info-userPosY">0</span></div>
+
+          <hr class="stat-divider" style="grid-column: span 2;">
+
+          <!-- Geister -->
+          <div class="info-block"><span class="info-label">Ghost 1 (nächst)</span><span class="stat-value" id="info-ghostPos-nächst">0</span></div>
+          <div class="info-block"><span class="info-label">Ghost 2</span><span class="stat-value" id="info-ghostPos-nahe">0</span></div>
+          <div class="info-block"><span class="info-label">Ghost 3</span><span class="stat-value" id="info-ghostPos-weit">0</span></div>
+          <div class="info-block"><span class="info-label">Ghost 4</span><span class="stat-value" id="info-ghostPos-weitest">0</span></div>
+
+          <hr class="stat-divider" style="grid-column: span 2;">
+
+          <!-- Receptive Field (volle Breite) -->
+          <div class="info-block" style="grid-column: span 2;">
+            <span class="info-label">Receptive Field (5×5)</span>
+            <span class="stat-value" id="info-receptive-field"> - </span>
+          </div>
+        </div>
+
+        <!-- Netzwerk-Visualisierung -->
+        <div class="stat-block-network">
+          <span class="stat-label">Neuronales Netzwerk (Live)</span>
+          <div id="network-viz"></div>
+        </div>
+      </div>
+      <!-- ── Ende Panel 2 ───────────────────────── -->
+
+    </div>
+    <!-- ── Ende wrapper ──────────────────────────── -->
+
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://unpkg.com/neataptic@1.4.7/dist/neataptic.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="pacman.js"></script>
+    <script src="modernizr-1.5.min.js"></script>
+
+    <script>
+      var el = document.getElementById("pacman");
+      if (Modernizr.canvas && Modernizr.localstorage && Modernizr.audio &&
+          (Modernizr.audio.ogg || Modernizr.audio.mp3)) {
+
+        initCharts();
+        window.setTimeout(function () { PACMAN.init(el, "./"); }, 0);
+      }
+    </script>
+
+  </body>
+</html>
