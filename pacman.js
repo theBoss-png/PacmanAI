@@ -11,40 +11,30 @@
 const { Neat, Network, architect, methods } = neataptic;
 const m = methods.mutation;
 
-let neat = new Neat(59, 4, null, { 
-    //mutation: [
-    //    m.ADD_NODE,    m.ADD_NODE,    m.ADD_NODE,    // 3× → höhere Chance
-    //    m.ADD_CONN,    m.ADD_CONN,    m.ADD_CONN,    m.ADD_CONN,
-    //    m.MOD_WEIGHT,  m.MOD_WEIGHT,  m.MOD_WEIGHT,  m.MOD_WEIGHT,  m.MOD_WEIGHT,
-    //    m.MOD_BIAS,    m.MOD_BIAS,
-    //    m.MOD_ACTIVATION,
-    //    m.SUB_NODE,    // nur 1× → seltener
-    //    m.SUB_CONN,    // nur 1× → seltener
-    //], 
+const NEAT_CONFIG = {
     mutation: [
-        m.MOD_WEIGHT,  m.MOD_WEIGHT,  m.MOD_WEIGHT,  m.MOD_WEIGHT, m.MOD_WEIGHT, // 4× dominant
-        m.MOD_BIAS,    m.MOD_BIAS, m.MOD_BIAS,
-        m.ADD_CONN,    m.ADD_CONN, m.ADD_CONN,
-        m.ADD_NODE,    m.ADD_NODE, m.ADD_NODE, m.ADD_NODE, m.ADD_NODE,
-        m.MOD_ACTIVATION,   // selten neu
-        m.SWAP_NODES,       // selten neu
-        // MOD_ACTIVATION und SWAP_NODES raus - zu destruktiv
+        m.MOD_WEIGHT, m.MOD_WEIGHT, m.MOD_WEIGHT,
+        m.MOD_BIAS, m.MOD_BIAS,
+        m.ADD_CONN, m.ADD_NODE, m.MOD_ACTIVATION
     ],
-    popsize: 50,
-    mutationRate: 0.3,
-    elitism: 5,
-});
+    popsize: 300,
+    mutationRate: 0.2,
+    elitism: 10,
+};
 
-neat.population.forEach(genome => {
-    genome.nodes.forEach(node => {
-        node.squash = methods.activation.TANH;
+let neat = null;
+
+function initNeat() {
+    neat = new Neat(59, 4, null, NEAT_CONFIG);
+    neat.population.forEach(genome => {
+        genome.connections.forEach(conn => {
+            conn.weight = (Math.random() * 0.4) - 0.2;
+        });
     });
-});
-neat.population.forEach(genome => {
-    genome.connections.forEach(conn => {
-        conn.weight = (Math.random() * 0.4) - 0.2; // Sehr kleine Startgewichte (-0.2 bis 0.2)
-    });
-}); 
+}
+
+initNeat();
+
 
 let currentGenome = 0;
 
@@ -409,9 +399,9 @@ function aiStep(tick) {
     if (curX === last_X && curY === last_Y) {
         stallCounter++;
         // Erst bestrafen, wenn er länger als 3 Ticks wirklich festklebt
-        //if (stallCounter > 3) {
-        //    currentGenomeInstance.penalty += 0.3;
-        //}
+        if (stallCounter > 3) {
+            currentGenomeInstance.penalty += 0.3;
+        }
     }
     else {
         stallCounter = 0;
@@ -650,23 +640,19 @@ function autoSave() {
 
 function exportSave() {
     const data = JSON.stringify({
-        neat: neat.export(),
+        neat:             neat.export(),
         generationCount,
         bestFitness,
-        generationScores,
-        generationGameScores,
-        generationPenalties,
-        generationSurvivalBonuses,
         generationTicks,
         generationNodes,
-        chartAvg:  avgChart.data.datasets[0].data.slice(),
-        chartAvgGame: avgChart.data.datasets[2].data.slice(),
-        chartAvgPenalty: avgChart.data.datasets[3].data.slice(),
+        chartAvg:         avgChart.data.datasets[0].data.slice(),
+        chartAvgGame:     avgChart.data.datasets[2].data.slice(),
+        chartAvgPenalty:  avgChart.data.datasets[3].data.slice(),
         chartAvgSurvival: avgChart.data.datasets[4].data.slice(),
-        chartBest: bestChart.data.datasets[0].data.slice(),
-        chartTick: avgTick.data.datasets[0].data.slice(),
-        chartNodes: nodesChart.data.datasets[0].data.slice(),
-        chartLabels: avgChart.data.labels.slice()
+        chartBest:        bestChart.data.datasets[0].data.slice(),
+        chartTick:        avgTick.data.datasets[0].data.slice(),
+        chartNodes:       nodesChart.data.datasets[0].data.slice(),
+        chartLabels:      avgChart.data.labels.slice()
     }, null, 2);
 
     const a = document.createElement('a');
@@ -683,44 +669,52 @@ function importSave(event) {
         try {
             const save = JSON.parse(e.target.result);
             neat.import(save.neat);
-            generationCount  = save.generationCount  || 0;
-            bestFitness      = save.bestFitness       || 0;
-            generationScores = save.generationScores  || [];
-            generationPenalties = save.generationPenalties || [];
-            generationGameScores = save.generationGameScores || [];
-            generationSurvivalBonuses = save.generationSurvivalBonuses || [];
-            generationTicks   = save.generationTicks    || [];
-            generationNodes   = save.generationNodes    || [];
-            currentGenome    = 0;
+
+            generationCount = save.generationCount || 0;
+            bestFitness     = save.bestFitness      || 0;
+            generationTicks = save.generationTicks  || [];
+            generationNodes = save.generationNodes  || [];
+
+            // Partielle Generation-Arrays immer verwerfen
+            generationScores          = [];
+            generationGameScores      = [];
+            generationPenalties       = [];
+            generationSurvivalBonuses = [];
+            currentGenome             = 0;
+
+            // Runtime-State resetten
+            stallCounter             = 0;
+            last_X                   = 0;
+            last_Y                   = 0;
+            accumulatedGhostDistance = 0;
+            ghostDistanceSamples     = 0;
 
             // Charts wiederherstellen
-            const labels = save.chartLabels || [];
-            const avg    = save.chartAvg    || [];
-            const avgGame = save.chartAvgGame || [];
-            const avgPenalty = save.chartAvgPenalty || [];
-            const avgSurvival = save.chartAvgSurvival || [];
-            const best   = save.chartBest   || [];
-            const tick   = save.chartTick   || [];
-            const nodes  = save.chartNodes  || [];
-            avgChart.data.labels               = labels.slice();
-            avgChart.data.datasets[0].data     = avg.slice();
-            avgChart.data.datasets[2].data     = avgGame.slice();
-            avgChart.data.datasets[3].data     = avgPenalty.slice();
-            avgChart.data.datasets[4].data     = avgSurvival.slice();
-            bestChart.data.labels              = labels.slice();
-            bestChart.data.datasets[0].data    = best.slice();
-            avgTick.data.labels                = labels.slice();
-            avgTick.data.datasets[0].data      = tick.slice();
-            nodesChart.data.labels             = labels.slice();
-            nodesChart.data.datasets[0].data   = nodes.slice();
-            updateTrendline(avgChart);
-            avgChart.update();
-            updateTrendline(bestChart);
-            bestChart.update();
-            updateTrendline(avgTick);
-            avgTick.update();
-            updateTrendline(nodesChart);
-            nodesChart.update();
+            const labels      = save.chartLabels     || [];
+            const avg         = save.chartAvg        || [];
+            const avgGame     = save.chartAvgGame    || [];
+            const avgPenalty  = save.chartAvgPenalty || [];
+            const avgSurvival = save.chartAvgSurvival|| [];
+            const best        = save.chartBest       || [];
+            const tick        = save.chartTick       || [];
+            const nodes       = save.chartNodes      || [];
+
+            avgChart.data.labels              = labels.slice();
+            avgChart.data.datasets[0].data    = avg.slice();
+            avgChart.data.datasets[2].data    = avgGame.slice();
+            avgChart.data.datasets[3].data    = avgPenalty.slice();
+            avgChart.data.datasets[4].data    = avgSurvival.slice();
+            bestChart.data.labels             = labels.slice();
+            bestChart.data.datasets[0].data   = best.slice();
+            avgTick.data.labels               = labels.slice();
+            avgTick.data.datasets[0].data     = tick.slice();
+            nodesChart.data.labels            = labels.slice();
+            nodesChart.data.datasets[0].data  = nodes.slice();
+
+            updateTrendline(avgChart);  avgChart.update();
+            updateTrendline(bestChart); bestChart.update();
+            updateTrendline(avgTick);   avgTick.update();
+            updateTrendline(nodesChart);nodesChart.update();
 
             document.getElementById('stat-autosave').innerText = '✅ Imported!';
         } catch(err) { alert('Import fehlgeschlagen: ' + err.message); }
@@ -733,16 +727,13 @@ function updateTrendline(chart) {
     if (!data || data.length < 2) return;
 
     let n = data.length;
-    let sumX = 0;
-    let sumY = 0;
-    let sumXY = 0;
-    let sumX2 = 0;
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
 
     for (let i = 0; i < n; i++) {
         const x = i + 1;
         const y = data[i];
-        sumX += x;
-        sumY += y;
+        sumX  += x;
+        sumY  += y;
         sumXY += x * y;
         sumX2 += x * x;
     }
@@ -751,25 +742,17 @@ function updateTrendline(chart) {
     const b = (sumY - m * sumX) / n;
 
     const trendPoints = new Array(n).fill(null);
-    
-    trendPoints[0] = m * 1 + b; 
+    trendPoints[0]     = m * 1 + b;
     trendPoints[n - 1] = m * n + b;
 
     chart.data.datasets[1].data = trendPoints;
     chart.update();
-
-    const targetScore = 1000;
-    const estimatedGen = (targetScore - b) / m;
-
-    //document.getElementById('stat-eta-score').innerText = m > 0 ? estimatedGen.toFixed(2) : "∞";
 }
 
 function clearSave() {
     if (!confirm('Alle Trainingsdaten löschen?')) return;
     localStorage.removeItem('pacman-neat');
-    neat = new Neat(59, 4, null, {
-        mutation: methods.mutation.ALL, popsize: 50, mutationRate: 0.3
-    });
+    initNeat();
     generationCount = 0; bestFitness = 0;
     generationScores = []; generationGameScores = []; generationPenalties = []; generationSurvivalBonuses = []; generationTicks = []; generationNodes = []; currentGenome = 0;
     if (avgChart)  { avgChart.data.labels  = []; avgChart.data.datasets[0].data  = []; avgChart.data.datasets[1].data = []; avgChart.data.datasets[2].data = []; avgChart.data.datasets[3].data = []; avgChart.data.datasets[4].data = []; avgChart.update(); }
@@ -1393,7 +1376,7 @@ var PACMAN = (function () {
         generationScores.push(fitness);
         generationGameScores.push(user.theScore());
         generationPenalties.push(penalty);
-        generationSurvivalBonuses.push(tick * 0.5); //[chart]
+        generationSurvivalBonuses.push(tick * 0.2); //[chart]
         generationTicks.push(tick);
         generationNodes.push(neat.population[currentGenome].nodes.length);
         accumulatedGhostDistance = 0;
@@ -1855,14 +1838,10 @@ function getRadarView(map, userPos) {
 }
 
 function calcFitness(score, penalty, tick) {
-    //const survivalBonus = tick * 0.2;
-    const avgGhostDist = ghostDistanceSamples > 0 
-        ? accumulatedGhostDistance / ghostDistanceSamples 
-        : 0;
-    const ghostDistanceBonus = Math.min(300, avgGhostDist)*2; // stärker gewichten
-    
-    //return Math.max(0, survivalBonus + ghostDistanceBonus - penalty);
-    return ghostDistanceBonus;
+    // Tick in "echte Sekunden" normalisieren
+    const realSeconds = tick / (Pacman.FPS * TICKS_PER_FRAME);
+    const survivalBonus = realSeconds * 6; // z.B. 6 Punkte/Sekunde
+    return survivalBonus + score * 2 - penalty; // Score stärker gewichten
 }
 
 function ghostData(ghostPos, userPos, info) {
