@@ -2,7 +2,6 @@
 /*global window: false, document: false */
 
 /*
- * fix looped audio
  * add fruits + levels
  * fix what happens when a ghost is eaten (should go back to base)
  * do proper ghost mechanics (blinky/wimpy etc)
@@ -20,6 +19,7 @@ const NEAT_CONFIG = {
     popsize: 300,
     mutationRate: 0.2,
     elitism: 10,
+    maxNodes: 120,
 };
 
 let neat = null;
@@ -35,6 +35,8 @@ function initNeat() {
 
 initNeat();
 
+let frameCount = 0;
+let cachedQuadrantData = null;
 
 let currentGenome = 0;
 
@@ -341,7 +343,7 @@ function updateInfoPanel() {
         document.getElementById("info-userPosY").innerText = Math.round(userPos.y);
     }
 
-    let quadrantData = calculateQuadrants(info.map);
+    let quadrantData = cachedQuadrantData || calculateQuadrants(info.map);
     document.getElementById("info-quadrant1").innerText = quadrantData.obenLinks.biscuits   + " | " + quadrantData.obenLinks.pills;
     document.getElementById("info-quadrant2").innerText = quadrantData.obenRechts.biscuits  + " | " + quadrantData.obenRechts.pills;
     document.getElementById("info-quadrant3").innerText = quadrantData.untenLinks.biscuits  + " | " + quadrantData.untenLinks.pills;
@@ -415,6 +417,7 @@ function aiStep(tick) {
 
     // Quadrants Biscuits und Pills
     let quadrantData = calculateQuadrants(info.map);
+    cachedQuadrantData = quadrantData; // Cache für Info-Panel
     inputs.push(quadrantData.obenLinks.biscuits / 50);
     inputs.push(quadrantData.obenRechts.biscuits / 50);
     inputs.push(quadrantData.untenLinks.biscuits / 50);
@@ -452,18 +455,8 @@ function aiStep(tick) {
     let radar = getRadarView(info.map.getMap(), userPos);
     radar.forEach(row => row.forEach(cell => inputs.push(cell / 4)));
 
-    inputs.forEach((v, i) => {
-        if (isNaN(v) || !isFinite(v) || v === undefined) {
-            console.error(`Input ${i} ist kaputt:`, v);
-        }
-    });
-
     let output = neat.population[currentGenome].activate(inputs);
 
-    if (tick % 200 === 0) {
-        //console.log("inputs:", inputs);
-        //console.log("output:", output);
-    }
     //xlet maxIndex = sampleFromOutput(output);
     let maxIndex = output.indexOf(Math.max(...output));
 
@@ -1194,87 +1187,6 @@ Pacman.Map = function (size) {
     };
 };
 
-Pacman.Audio = function(game) {
-    
-    var files          = [], 
-        endEvents      = [],
-        progressEvents = [],
-        playing        = [];
-    
-    function load(name, path, cb) { 
-
-        var f = files[name] = document.createElement("audio");
-
-        progressEvents[name] = function(event) { progress(event, name, cb); };
-        
-        f.addEventListener("canplaythrough", progressEvents[name], true);
-        f.setAttribute("preload", "true");
-        f.setAttribute("autobuffer", "true");
-        f.setAttribute("src", path);
-        f.pause();        
-    };
-
-    function progress(event, name, callback) { 
-        if (event.loaded === event.total && typeof callback === "function") {
-            callback();
-            files[name].removeEventListener("canplaythrough", 
-                                            progressEvents[name], true);
-        }
-    };
-
-    function disableSound() {
-        for (var i = 0; i < playing.length; i++) {
-            files[playing[i]].pause();
-            files[playing[i]].currentTime = 0;
-        }
-        playing = [];
-    };
-
-    function ended(name) { 
-
-        var i, tmp = [], found = false;
-
-        files[name].removeEventListener("ended", endEvents[name], true);
-
-        for (i = 0; i < playing.length; i++) {
-            if (!found && playing[i]) { 
-                found = true;
-            } else { 
-                tmp.push(playing[i]);
-            }
-        }
-        playing = tmp;
-    };
-
-    function play(name) { 
-        if (!game.soundDisabled()) {
-            endEvents[name] = function() { ended(name); };
-            playing.push(name);
-            files[name].addEventListener("ended", endEvents[name], true);
-            files[name].play();
-        }
-    };
-
-    function pause() { 
-        for (var i = 0; i < playing.length; i++) {
-            files[playing[i]].pause();
-        }
-    };
-    
-    function resume() { 
-        for (var i = 0; i < playing.length; i++) {
-            files[playing[i]].play();
-        }        
-    };
-    
-    return {
-        "disableSound" : disableSound,
-        "load"         : load,
-        "play"         : play,
-        "pause"        : pause,
-        "resume"       : resume
-    };
-};
 
 var PACMAN = (function () {
 
@@ -1314,17 +1226,12 @@ var PACMAN = (function () {
             x     = ((map.width * map.blockSize) - width) / 2;        
         ctx.fillText(text, x, (map.height * 10) + 8);
     }
-
-    function soundDisabled() {
-        return localStorage["soundDisabled"] === "true";
-    };
     
     function startLevel() {        
         user.resetPosition();
         for (var i = 0; i < ghosts.length; i += 1) { 
             ghosts[i].reset();
         }
-        audio.play("start");
         timerStart = tick;
         setState(COUNTDOWN);
     }    
@@ -1342,17 +1249,12 @@ var PACMAN = (function () {
     function keyDown(e) {
         if (e.keyCode === KEY.N) {
             startNewGame();
-        } else if (e.keyCode === KEY.S) {
-            audio.disableSound();
-            localStorage["soundDisabled"] = !soundDisabled();
         } else if (e.keyCode === KEY.P && state === PAUSE) {
-            audio.resume();
             map.draw(ctx);
             setState(stored);
         } else if (e.keyCode === KEY.P) {
             stored = state;
             setState(PAUSE);
-            audio.pause();
             map.draw(ctx);
             dialog("Paused");
         } else if (state !== PAUSE) {   
@@ -1428,7 +1330,7 @@ var PACMAN = (function () {
             }
 
             updateStatsPanel(fitness, tick);
-            autoSave();
+            //autoSave();
         }
 
         setState(WAITING);
@@ -1472,9 +1374,7 @@ var PACMAN = (function () {
             ctx.fill();
         }
 
-        ctx.fillStyle = !soundDisabled() ? "#00FF00" : "#FF0000";
         ctx.font = "bold 16px sans-serif";
-        //ctx.fillText("♪", 10, textBase);
         ctx.fillText("s", 10, textBase);
 
         ctx.fillStyle = "#FFFF00";
@@ -1488,115 +1388,88 @@ var PACMAN = (function () {
         map.drawBlock(Math.ceil(pos.y/10), Math.ceil(pos.x/10), ctx);
     }
 
-    function mainDraw() { 
+    function mainUpdate() {
+        var i, len, u, nScore;
 
-        var diff, u, i, len, nScore;
-        
         ghostPos = [];
-
         for (i = 0, len = ghosts.length; i < len; i += 1) {
             ghostPos.push(ghosts[i].move(ctx));
         }
         u = user.move(ctx);
-        
-        for (i = 0, len = ghosts.length; i < len; i += 1) {
-            redrawBlock(ghostPos[i].old);
-        }
-        redrawBlock(u.old);
-        
-        for (i = 0, len = ghosts.length; i < len; i += 1) {
-            ghosts[i].draw(ctx);
-        }                     
-        user.draw(ctx);
-        
         userPos = u["new"];
-        
+
         for (i = 0, len = ghosts.length; i < len; i += 1) {
             if (collided(userPos, ghostPos[i]["new"])) {
-                if (ghosts[i].isVunerable()) { 
-                    audio.play("eatghost");
+                if (ghosts[i].isVunerable()) {
                     ghosts[i].eat();
                     eatenCount += 1;
                     nScore = eatenCount * 50;
-                    drawScore(nScore, ghostPos[i]);
-                    user.addScore(nScore);                    
+                    user.addScore(nScore);
                     setState(EATEN_PAUSE);
                     timerStart = tick;
                 } else if (ghosts[i].isDangerous()) {
-                    audio.play("die");
                     setState(DYING);
                     timerStart = tick;
                 }
             }
-        }                             
-    };
+        }
+
+        return u; // brauchen wir für u.old im Draw
+    }
+
+    function mainDraw(u) {
+        var i, len;
+
+        for (i = 0, len = ghosts.length; i < len; i += 1) {
+            redrawBlock(ghostPos[i].old);
+        }
+        redrawBlock(u.old);
+
+        for (i = 0, len = ghosts.length; i < len; i += 1) {
+            ghosts[i].draw(ctx);
+        }
+        user.draw(ctx);
+
+        if (state === EATEN_PAUSE) {
+            // drawScore war vorher im Update — jetzt hier weil es Zeichnen ist
+            drawScore(eatenCount * 50, ghostPos.find(g => collided(userPos, g["new"])));
+        }
+    }
 
     function mainLoop() {
-
-        updateInfoPanel();
-        let fitness = calcFitness(user.theScore(), neat.population[currentGenome].penalty || 0, tick);
-
-        var diff;
-
-        if (state !== PAUSE) { 
-            ++tick;
-        }
-
-        if (tick % 5 === 0) {
-            updateStatsPanel(fitness, tick);
-        }
-
-        map.drawPills(ctx);
-
-
+        if (state !== PAUSE) { ++tick; }
         if (state === PLAYING) {
-            if (tick % 2 === 0) {
-                aiStep(tick);
+            if (tick % 3 === 0) { aiStep(tick); }
+            const u = mainUpdate();
+            if (tick % 500 === 0) {
+                mainDraw(u);
             }
-            mainDraw();
-        } else if (state === WAITING && stateChanged) {            
+        } else if (state === WAITING && stateChanged) {
             stateChanged = false;
             map.draw(ctx);
-            dialog("Press N to start a New game");            
-        } else if (state === EATEN_PAUSE && 
-                   (tick - timerStart) > (Pacman.FPS / 3)) {
+            dialog("Press N to start a New game");
+        } else if (state === EATEN_PAUSE && (tick - timerStart) > (Pacman.FPS / 3)) {
             map.draw(ctx);
             setState(PLAYING);
         } else if (state === DYING) {
-            if (tick - timerStart > (Pacman.FPS * 0.3)) { 
+            if (tick - timerStart > (Pacman.FPS * 0.3)) {
                 loseLife();
-            } else { 
+            } else {
                 redrawBlock(userPos);
                 for (i = 0, len = ghosts.length; i < len; i += 1) {
-                    if (ghostPos[i] && ghostPos[i].old) {
-                        redrawBlock(ghostPos[i].old);
-                    }
+                    if (ghostPos[i]?.old) redrawBlock(ghostPos[i].old);
                     ghostPos.push(ghosts[i].draw(ctx));
-                }     
-                ghostPos = [];                               
+                }
+                ghostPos = [];
                 user.drawDead(ctx, (tick - timerStart) / (Pacman.FPS * 0.3));
             }
         } else if (state === COUNTDOWN) {
-            
-            diff = 0
-            
-            if (diff === 0) {
-                map.draw(ctx);
-                setState(PLAYING);
-            } else {
-                if (diff !== lastTime) { 
-                    lastTime = diff;
-                    map.draw(ctx);
-                    dialog("Starting in: " + diff);
-                }
-            }
-        } 
-
-        drawFooter();
+            map.draw(ctx);
+            setState(PLAYING);
+        }
     }
 
     function eatenPill() {
-        audio.play("eatpill");
         timerStart = tick;
         eatenCount = 0;
         for (i = 0; i < ghosts.length; i += 1) {
@@ -1633,7 +1506,6 @@ var PACMAN = (function () {
 
         ctx  = canvas.getContext('2d');
 
-        audio = new Pacman.Audio({"soundDisabled":soundDisabled});
         map   = new Pacman.Map(blockSize);
         user  = new Pacman.User({ 
             "completedLevel" : completedLevel, 
@@ -1648,28 +1520,7 @@ var PACMAN = (function () {
         map.draw(ctx);
         dialog("Loading ...");
 
-        var extension = Modernizr.audio.ogg ? 'ogg' : 'mp3';
-
-        var audio_files = [
-            ["start", root + "audio/opening_song." + extension],
-            ["die", root + "audio/die." + extension],
-            ["eatghost", root + "audio/eatghost." + extension],
-            ["eatpill", root + "audio/eatpill." + extension],
-            ["eating", root + "audio/eating.short." + extension],
-            ["eating2", root + "audio/eating.short." + extension]
-        ];
-
-        load(audio_files, function() { loaded(); });
-    };
-
-    function load(arr, callback) { 
-        
-        if (arr.length === 0) { 
-            callback();
-        } else { 
-            var x = arr.pop();
-            audio.load(x[0], x[1], function() { load(arr, callback); });
-        }
+        loaded()
     };
         
     function loaded() {
@@ -1678,16 +1529,24 @@ var PACMAN = (function () {
         document.addEventListener("keydown", keyDown, true);
         document.addEventListener("keypress", keyPress, true); 
 
-        // Wir deklarieren die Funktion so, dass sie sich selbst immer wieder aufruft
         function loop() {
-            // TICKS_PER_FRAME erlaubt es dir, die Logik schneller als die Grafik 
-            // laufen zu lassen (z.B. für Zeitraffer-Training der KI)
+            frameCount++;
+
             for (let i = 0; i < TICKS_PER_FRAME; i++) {
-                mainLoop(); 
+                mainLoop();
             }
-            
-            // Das ist das "Endlos"-Herzstück: Sobald ein Frame gezeichnet wurde, 
-            // wird der nächste angefordert.
+
+            // Genau 1× pro echtem Frame:
+            if (frameCount % 10 === 0) {
+                map.drawPills(ctx);
+                drawFooter();
+                updateInfoPanel();
+                updateStatsPanel(
+                    calcFitness(user.theScore(), neat.population[currentGenome]?.penalty || 0, tick),
+                    tick
+                );
+            }
+
             requestAnimationFrame(loop);
         }
 
