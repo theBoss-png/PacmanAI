@@ -19,13 +19,13 @@ const NEAT_CONFIG = {
     popsize: 300,
     mutationRate: 0.2,
     elitism: 10,
-    maxNodes: 120,
+    maxNodes: 700,
 };
 
 let neat = null;
 
 function initNeat() {
-    neat = new Neat(59, 4, null, NEAT_CONFIG);
+    neat = new Neat(477, 4, null, NEAT_CONFIG);
     neat.population.forEach(genome => {
         genome.connections.forEach(conn => {
             conn.weight = (Math.random() * 0.4) - 0.2;
@@ -34,6 +34,8 @@ function initNeat() {
 }
 
 initNeat();
+
+let print_once_test = true;
 
 let frameCount = 0;
 let cachedQuadrantData = null;
@@ -71,7 +73,8 @@ var NONE        = 4,
 
 Pacman.FPS = 30;
 
-const TICKS_PER_FRAME = 512;
+const TICKS_PER_FRAME = 1024;
+const UI_UPDATE_INTERVAL = 1024;
 
 
 Pacman.Ghost = function (game, map, colour) {
@@ -451,9 +454,18 @@ function aiStep(tick) {
         inputs.push(g.dy);
         inputs.push(Math.min(g.scared, 1)); 
     }
+    if (print_once_test) {
+        console.log(info.map.getMap().length);
+        console.log(info.map.getMap()[0].length);
+        console.log(info.map.getMap())
 
-    let radar = getRadarView(info.map.getMap(), userPos);
+        console.log("size: " + info.map.getMap().length * info.map.getMap()[0].length);
+    }
+    let map = info.map.getMap();
+    let radar = getRadarView(map, userPos);
     radar.forEach(row => row.forEach(cell => inputs.push(cell / 4)));
+
+    map.forEach(row => row.forEach(cell => inputs.push(cell / 4)));
 
     let output = neat.population[currentGenome].activate(inputs);
 
@@ -462,6 +474,11 @@ function aiStep(tick) {
 
     const moves = [11, 3, 2, 1];
     PACMAN.setDirection(moves[maxIndex]);
+
+    if (print_once_test) {
+        print_once_test = false;
+        console.log("Inputs: " + inputs.length + " | Outputs: " + output);
+    }
 }
 
 // ── Charts ────────────────────────────────────────────────────
@@ -1441,7 +1458,7 @@ var PACMAN = (function () {
         if (state === PLAYING) {
             if (tick % 3 === 0) { aiStep(tick); }
             const u = mainUpdate();
-            if (tick % 500 === 0) {
+            if (tick % UI_UPDATE_INTERVAL === 0) {
                 mainDraw(u);
             }
         } else if (state === WAITING && stateChanged) {
