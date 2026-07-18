@@ -1456,7 +1456,7 @@ var PACMAN = (function () {
     function mainLoop() {
         if (state !== PAUSE) { ++tick; }
         if (state === PLAYING) {
-            if (tick % 3 === 0) { aiStep(tick); }
+            if (tick % 6 === 0) { aiStep(tick); }
             const u = mainUpdate();
             if (tick % UI_UPDATE_INTERVAL === 0) {
                 mainDraw(u);
