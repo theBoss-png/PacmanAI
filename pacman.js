@@ -19,7 +19,7 @@ const NEAT_CONFIG = {
     popsize: 300,
     mutationRate: 0.2,
     elitism: 10,
-    maxNodes: 700,
+    maxNodes: 600,
 };
 
 let neat = null;
@@ -73,8 +73,8 @@ var NONE        = 4,
 
 Pacman.FPS = 30;
 
-const TICKS_PER_FRAME = 1024;
-const UI_UPDATE_INTERVAL = 1024;
+const TICKS_PER_FRAME = 1;
+const UI_UPDATE_INTERVAL = 1;
 
 
 Pacman.Ghost = function (game, map, colour) {
@@ -462,10 +462,11 @@ function aiStep(tick) {
         console.log("size: " + info.map.getMap().length * info.map.getMap()[0].length);
     }
     let map = info.map.getMap();
-    let radar = getRadarView(map, userPos);
-    radar.forEach(row => row.forEach(cell => inputs.push(cell / 4)));
+    let entityMap = buildEntityMap(map, userPos, ghostPos, info.ghosts);
+    let radar = getRadarView(entityMap, userPos);
 
-    map.forEach(row => row.forEach(cell => inputs.push(cell / 4)));
+    radar.forEach(row => row.forEach(cell => inputs.push(cell / 4)));
+    entityMap.forEach(row => row.forEach(cell => inputs.push(cell / 7)));
 
     let output = neat.population[currentGenome].activate(inputs);
 
@@ -1204,7 +1205,6 @@ Pacman.Map = function (size) {
     };
 };
 
-
 var PACMAN = (function () {
 
     var state        = WAITING,
@@ -1718,6 +1718,34 @@ function calcFitness(score, penalty, tick) {
     const realSeconds = tick / (Pacman.FPS * TICKS_PER_FRAME);
     const survivalBonus = realSeconds * 6; // z.B. 6 Punkte/Sekunde
     return survivalBonus + score * 2 - penalty; // Score stärker gewichten
+}
+
+function buildEntityMap(map, userPos, ghostPos, ghosts) {
+    // Tiefe Kopie, damit die echte Map nicht verändert wird
+    const grid = map.map(row => row.slice());
+
+    function toGrid(pos) {
+        return { x: Math.round(pos.x / 10), y: Math.round(pos.y / 10) };
+    }
+
+    // Pacman einzeichnen
+    const p = toGrid(userPos);
+    if (grid[p.y] && grid[p.y][p.x] !== undefined) {
+        grid[p.y][p.x] = 5;
+    }
+
+    // Geister einzeichnen
+    if (ghostPos && ghosts) {
+        ghostPos.forEach((g, i) => {
+            const gp = toGrid(g["new"]);
+            if (grid[gp.y] && grid[gp.y][gp.x] !== undefined) {
+                // 7 = verwundbar (blau/essbar), 6 = normal gefährlich
+                grid[gp.y][gp.x] = ghosts[i].isVunerable() ? 7 : 6;
+            }
+        });
+    }
+
+    return grid;
 }
 
 function ghostData(ghostPos, userPos, info) {
